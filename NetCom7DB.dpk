@@ -1,0 +1,45 @@
+package NetCom7DB;
+
+{$R *.res}
+{$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
+{$ALIGN 8}
+{$ASSERTIONS ON}
+{$BOOLEVAL OFF}
+{$DEBUGINFO OFF}
+{$EXTENDEDSYNTAX ON}
+{$IMPORTEDDATA ON}
+{$IOCHECKS ON}
+{$LOCALSYMBOLS ON}
+{$LONGSTRINGS ON}
+{$OPENSTRINGS ON}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
+{$SAFEDIVIDE OFF}
+{$STACKFRAMES ON}
+{$TYPEDADDRESS OFF}
+{$VARSTRINGCHECKS ON}
+{$WRITEABLECONST OFF}
+{$MINENUMSIZE 1}
+{$IMAGEBASE $400000}
+{$DEFINE DEBUG}
+{$DEFINE USERECORDWITHMETHODS}
+{$ENDIF IMPLICITBUILDING}
+{$DESCRIPTION 'NetCom7 Network Communications Suite DB Library Runtime Package'}
+{$RUNONLY}
+{$IMPLICITBUILD ON}
+
+requires
+  rtl,
+  NetCom7,
+  dbrtl,
+  adortl;
+
+contains
+  ncDBSrv in 'Source\ncDBSrv.pas',
+  ncDBCommands in 'Source\ncDBCommands.pas',
+  ncDBCnt in 'Source\ncDBCnt.pas',
+  ncSerializeADO in 'Source\ncSerializeADO.pas';
+
+end.

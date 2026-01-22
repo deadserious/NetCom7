@@ -1,0 +1,60 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{8FB07196-0B27-4057-8F2A-E83B26E90255}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="NetCom7.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="NetCom7DB.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="NetCom7.designtime.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="NetCom7">
+        <MSBuild Projects="NetCom7.dproj"/>
+    </Target>
+    <Target Name="NetCom7:Clean">
+        <MSBuild Projects="NetCom7.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="NetCom7:Make">
+        <MSBuild Projects="NetCom7.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="NetCom7DB">
+        <MSBuild Projects="NetCom7DB.dproj"/>
+    </Target>
+    <Target Name="NetCom7DB:Clean">
+        <MSBuild Projects="NetCom7DB.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="NetCom7DB:Make">
+        <MSBuild Projects="NetCom7DB.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="NetCom7_designtime">
+        <MSBuild Projects="NetCom7.designtime.dproj"/>
+    </Target>
+    <Target Name="NetCom7_designtime:Clean">
+        <MSBuild Projects="NetCom7.designtime.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="NetCom7_designtime:Make">
+        <MSBuild Projects="NetCom7.designtime.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="NetCom7;NetCom7DB;NetCom7_designtime"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="NetCom7:Clean;NetCom7DB:Clean;NetCom7_designtime:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="NetCom7:Make;NetCom7DB:Make;NetCom7_designtime:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

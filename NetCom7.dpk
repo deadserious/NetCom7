@@ -1,57 +1,57 @@
 package NetCom7;
 
 {$R *.res}
-{$R 'Source\NetComRegister.dcr'}
-{$R *.dres}
 {$IFDEF IMPLICITBUILDING This IFDEF should not be used by users}
 {$ALIGN 8}
-{$ASSERTIONS OFF}
+{$ASSERTIONS ON}
 {$BOOLEVAL OFF}
 {$DEBUGINFO OFF}
 {$EXTENDEDSYNTAX ON}
 {$IMPORTEDDATA ON}
 {$IOCHECKS ON}
-{$LOCALSYMBOLS OFF}
+{$LOCALSYMBOLS ON}
 {$LONGSTRINGS ON}
 {$OPENSTRINGS ON}
-{$OPTIMIZATION ON}
-{$OVERFLOWCHECKS OFF}
-{$RANGECHECKS OFF}
-{$REFERENCEINFO OFF}
+{$OPTIMIZATION OFF}
+{$OVERFLOWCHECKS ON}
+{$RANGECHECKS ON}
+{$REFERENCEINFO ON}
 {$SAFEDIVIDE OFF}
-{$STACKFRAMES OFF}
+{$STACKFRAMES ON}
 {$TYPEDADDRESS OFF}
-{$VARSTRINGCHECKS OFF}
+{$VARSTRINGCHECKS ON}
 {$WRITEABLECONST OFF}
 {$MINENUMSIZE 1}
 {$IMAGEBASE $400000}
-{$DEFINE RELEASE}
+{$DEFINE DEBUG}
+{$DEFINE USERECORDWITHMETHODS}
 {$ENDIF IMPLICITBUILDING}
-{$DESCRIPTION 'NetCom7 Network Communications Suite'}
+{$DESCRIPTION 'NetCom7 Network Communications Suite Runtime Package'}
+{$RUNONLY}
 {$IMPLICITBUILD ON}
 
 requires
-  rtl,
-  DesignIDE,
-  dbrtl,
-  adortl;
+  rtl;
 
 contains
-  NetComRegister in 'Source\NetComRegister.pas',
-  ncThreads in 'Source\ncThreads.pas',
-  ncLines in 'Source\ncLines.pas',
-  ncSocketList in 'Source\ncSocketList.pas',
-  ncSockets in 'Source\ncSockets.pas',
-  ncSocketsThd in 'Source\ncSocketsThd.pas',
-  ncCommandPacking in 'Source\ncCommandPacking.pas',
   ncCommandHandlers in 'Source\ncCommandHandlers.pas',
-  ncSources in 'Source\ncSources.pas',
-  ncSerializeADO in 'Source\ncSerializeADO.pas',
-  ncDBSrv in 'Source\ncDBSrv.pas',
-  ncDBCnt in 'Source\ncDBCnt.pas',
-  ncDBCommands in 'Source\ncDBCommands.pas',
+  ncCommandPacking in 'Source\ncCommandPacking.pas',
   ncCompression in 'Source\ncCompression.pas',
   ncEncryption in 'Source\ncEncryption.pas',
+  ncIPUtils in 'Source\ncIPUtils.pas',
+  ncLines in 'Source\ncLines.pas',
+  ncPendingCommandsList in 'Source\ncPendingCommandsList.pas',
+  ncSerializeValue in 'Source\ncSerializeValue.pas',
+  ncSocketList in 'Source\ncSocketList.pas',
+  ncSockets in 'Source\ncSockets.pas',
+  ncSocketsDual in 'Source\ncSocketsDual.pas',
+  ncSocketsThd in 'Source\ncSocketsThd.pas',
+  ncSources in 'Source\ncSources.pas',
+  ncThreads in 'Source\ncThreads.pas',
+  ncUDPSockets in 'Source\ncUDPSockets.pas',
+  ncUDPSocketsDual in 'Source\ncUDPSocketsDual.pas',
+  ncUDPSocketsLCP in 'Source\ncUDPSocketsLCP.pas',
+  ncSChannel in 'Source\ncSChannel.pas',
   ncEncBlockciphers in 'Source\Encryption\ncEncBlockciphers.pas',
   ncEncBlowfish in 'Source\Encryption\ncEncBlowfish.pas',
   ncEncCast128 in 'Source\Encryption\ncEncCast128.pas',
@@ -78,14 +78,6 @@ contains
   ncEncSha512 in 'Source\Encryption\ncEncSha512.pas',
   ncEncTea in 'Source\Encryption\ncEncTea.pas',
   ncEncTiger in 'Source\Encryption\ncEncTiger.pas',
-  ncEncTwofish in 'Source\Encryption\ncEncTwofish.pas',
-  ncPendingCommandsList in 'Source\ncPendingCommandsList.pas',
-  ncUDPSockets in 'Source\ncUDPSockets.pas',
-  ncUDPSocketsLCP in 'Source\ncUDPSocketsLCP.pas',
-  ncUDPSocketsDual in 'Source\ncUDPSocketsDual.pas',
-  ncIPUtils in 'Source\ncIPUtils.pas',
-  ncSChannel in 'Source\ncSChannel.pas',
-  ncSocketsDual in 'Source\ncSocketsDual.pas';
+  ncEncTwofish in 'Source\Encryption\ncEncTwofish.pas';
 
 end.
-
