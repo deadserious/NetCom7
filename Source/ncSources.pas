@@ -25,6 +25,13 @@ unit ncSources;
 // These components have built in encryption and compression, set by the
 // corresponding properties.
 //
+// 25/07/2025- by J.Pauwels
+// - Replace TCriticalSection to TMonitor
+//
+// 14/01/2025 - by J.Pauwels
+// - Explicitly set this unit to use TCP
+// - Added IPV6 support
+//
 // 12/8/2020
 // - Complete re-engineering of the base component
 //
@@ -184,6 +191,9 @@ type
     function GetReaderThreadPriority: TncThreadPriority;
     procedure SetReaderThreadPriority(const Value: TncThreadPriority);
 
+    function GetFamily: TAddressType;
+    procedure SetFamily(const Value: TAddressType);
+
     // For implementing the IncCommandHandler interface
     function GetComponentName: string;
     function GetOnConnected: TncOnSourceConnectDisconnect;
@@ -221,12 +231,12 @@ type
     WasSetActive: Boolean;
     WithinConnectionHandler: Boolean;
   protected
-    PropertyLock: TCriticalSection;
+    PropertyLock: TObject; // TMonitor synchronization object
     CommandHandlers: array of IncCommandHandler;
     UniqueSentID: TncCommandUniqueID;
     HandleCommandThreadPool: TncThreadPool;
     Socket: TncTCPBase;
-    ExecuteSerialiser: TCriticalSection;
+    ExecuteSerialiser: TObject; // TMonitor synchronization object
 
     LastConnectedLine, LastDisconnectedLine, LastReconnectedLine: TncLine;
 
@@ -264,6 +274,7 @@ type
     property ReaderThreadPriority: TncThreadPriority read GetReaderThreadPriority write SetReaderThreadPriority default DefReaderThreadPriority;
     property NoDelay: Boolean read GetNoDelay write SetNoDelay default True;
     property KeepAlive: Boolean read GetKeepAlive write SetKeepAlive default True;
+    property Family: TAddressType read GetFamily write SetFamily default afIPv4;
 
     // New properties for sources
     property CommandProcessorThreadPriority: TncThreadPriority read GetCommandProcessorThreadPriority write SetCommandProcessorThreadPriority
@@ -365,6 +376,7 @@ end;
 function TncSourceLine.CreateLineObject: TncLine;
 begin
   Result := TncSourceLine.Create; // Create its own kind of objects
+  TncSourceLine(Result).SetKind(stTCP); // Explicitly set to TCP
 end;
 
 // /////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -375,8 +387,8 @@ constructor TncSourceBase.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  PropertyLock := TCriticalSection.Create;
-  ExecuteSerialiser := TCriticalSection.Create;
+  PropertyLock := TObject.Create;
+  ExecuteSerialiser := TObject.Create;
 
   Socket := nil;
   WasSetActive := False;
@@ -596,7 +608,7 @@ var
   PendingNdx: Integer;
   WaitForEventTimeout: Integer;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     IDSent := UniqueSentID;
 
@@ -636,7 +648,7 @@ begin
       Exit; // Nothing more to do
     end;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 
   // We are here because we require a result and this is not an AsyncExecute
@@ -657,7 +669,7 @@ begin
         // the socket reading is paused, so we need to process it here
         if WithinConnectionHandler then
         begin
-          ExecuteSerialiser.Acquire;
+          TMonitor.Enter(ExecuteSerialiser);
           try
             if (Socket is TncTCPClient) then
             begin
@@ -675,7 +687,7 @@ begin
               TncServerProcessor(TncTCPServer(Socket).LineProcessor).ReadySocketsChanged := True;
             end;
           finally
-            ExecuteSerialiser.Release;
+            TMonitor.Exit(ExecuteSerialiser);
           end;
         end;
 
@@ -683,18 +695,18 @@ begin
           raise ENetComCommandExecutionTimeout.Create(ENetComCommandExecutionTimeoutMessage);
       end;
     except
-      PropertyLock.Acquire;
+      TMonitor.Enter(PropertyLock);
       try
         PendingCommandsList.Delete(PendingCommandsList.IndexOf(IDSent));
       finally
-        PropertyLock.Release;
+        TMonitor.Exit(PropertyLock);
       end;
       raise;
     end;
 
     // We are here because we got the result
     // Get the result of the command into the result of this function
-    PropertyLock.Acquire;
+    TMonitor.Enter(PropertyLock);
     try
       PendingNdx := PendingCommandsList.IndexOf(IDSent);
       try
@@ -707,7 +719,7 @@ begin
         PendingCommandsList.Delete(PendingNdx);
       end;
     finally
-      PropertyLock.Release;
+      TMonitor.Exit(PropertyLock);
     end;
   finally
     ReceivedResultEvent.Free; // Event not needed any more
@@ -726,7 +738,7 @@ begin
     ctInitiator:
       begin
         // Handle the command from the thread pool
-        HandleCommandThreadPool.Serialiser.Acquire;
+        TMonitor.Enter(HandleCommandThreadPool);
         try
           HandleCommandThread := THandleCommandThread(HandleCommandThreadPool.RequestReadyThread);
           HandleCommandThread.WorkType := htwtOnHandleCommand;
@@ -736,14 +748,14 @@ begin
           HandleCommandThread.Command := Command;
           HandleCommandThreadPool.RunRequestedThread(HandleCommandThread);
         finally
-          HandleCommandThreadPool.Serialiser.Release;
+          TMonitor.Exit(HandleCommandThreadPool);
         end;
       end;
     ctResponse:
       if Command.AsyncExecute then
       begin
         // Handle the command from the thread pool
-        HandleCommandThreadPool.Serialiser.Acquire;
+        TMonitor.Enter(HandleCommandThreadPool);
         try
           HandleCommandThread := THandleCommandThread(HandleCommandThreadPool.RequestReadyThread);
           HandleCommandThread.WorkType := htwtAsyncResponse;
@@ -753,12 +765,12 @@ begin
           HandleCommandThread.Command := Command;
           HandleCommandThreadPool.RunRequestedThread(HandleCommandThread);
         finally
-          HandleCommandThreadPool.Serialiser.Release;
+          TMonitor.Exit(HandleCommandThreadPool);
         end;
       end
       else
       begin
-        PropertyLock.Acquire;
+        TMonitor.Enter(PropertyLock);
         try
           // Find the event to set from the PendingCommandsList
           PendingNdx := PendingCommandsList.IndexOf(Command.UniqueID);
@@ -770,7 +782,7 @@ begin
             PendingCommandsList.ReceivedResultEvents[PendingNdx].SetEvent;
           end;
         finally
-          PropertyLock.Release;
+          TMonitor.Exit(PropertyLock);
         end;
       end;
   end;
@@ -865,6 +877,16 @@ begin
     Socket.Active := Value;
 end;
 
+function TncSourceBase.GetFamily: TAddressType;
+begin
+  Result := Socket.Family;
+end;
+
+procedure TncSourceBase.SetFamily(const Value: TAddressType);
+begin
+  Socket.Family := Value;
+end;
+
 function TncSourceBase.GetKeepAlive: Boolean;
 begin
   Result := Socket.KeepAlive;
@@ -907,59 +929,59 @@ end;
 
 function TncSourceBase.GetExecCommandTimeout: Cardinal;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FCommandExecTimeout;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetExecCommandTimeout(const Value: Cardinal);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FCommandExecTimeout := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetCommandProcessorThreadPriority: TncThreadPriority;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FCommandProcessorThreadPriority;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetCommandProcessorThreadPriority(const Value: TncThreadPriority);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FCommandProcessorThreadPriority := Value;
     if not(csLoading in ComponentState) then
       HandleCommandThreadPool.SetThreadPriority(Value);
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetCommandProcessorThreads: Integer;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FCommandProcessorThreads;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetCommandProcessorThreads(const Value: Integer);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FCommandProcessorThreads := Value;
     if Value <> 0 then
@@ -969,23 +991,23 @@ begin
       HandleCommandThreadPool.SetExecThreads(Max(1, Max(FCommandProcessorThreads, GetNumberOfProcessors * FCommandProcessorThreadsPerCPU)),
         FCommandProcessorThreadPriority);
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetCommandProcessorThreadsPerCPU: Integer;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FCommandProcessorThreadsPerCPU;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetCommandProcessorThreadsPerCPU(const Value: Integer);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FCommandProcessorThreadsPerCPU := Value;
     if Value <> 0 then
@@ -995,128 +1017,128 @@ begin
       HandleCommandThreadPool.SetExecThreads(Max(1, Max(FCommandProcessorThreads, GetNumberOfProcessors * FCommandProcessorThreadsPerCPU)),
         FCommandProcessorThreadPriority);
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetCommandProcessorThreadsGrowUpto: Integer;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FCommandProcessorThreadsGrowUpto;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetCommandProcessorThreadsGrowUpto(const Value: Integer);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FCommandProcessorThreadsGrowUpto := Value;
     HandleCommandThreadPool.GrowUpto := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetEventsUseMainThread: Boolean;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FEventsUseMainThread;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetEventsUseMainThread(const Value: Boolean);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FEventsUseMainThread := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetCompression: TZCompressionLevel;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FCompression;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetCompression(const Value: TZCompressionLevel);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FCompression := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetEncryption: TEncryptorType;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FEncryption;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetEncryption(const Value: TEncryptorType);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FEncryption := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetEncryptionKey: AnsiString;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FEncryptionKey;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetEncryptionKey(const Value: AnsiString);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FEncryptionKey := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncSourceBase.GetEncryptOnHashedKey: Boolean;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FEncryptOnHashedKey;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncSourceBase.SetEncryptOnHashedKey(const Value: Boolean);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FEncryptOnHashedKey := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
@@ -1259,6 +1281,7 @@ type
 function TncTCPClientSourceSocket.CreateLineObject: TncLine;
 begin
   Result := TncSourceLine.Create;
+  TncSourceLine(Result).SetKind(stTCP);
 end;
 
 constructor TncClientSource.Create(AOwner: TComponent);
@@ -1268,6 +1291,7 @@ begin
   FOnReconnected := nil;
 
   Socket := TncTCPClientSourceSocket.Create(nil);
+  Socket.Family := afIPv4; // Set default family
   Socket.Port := DefPort;
   Socket.NoDelay := DefNoDelay;
   Socket.EventsUseMainThread := False;
@@ -1351,6 +1375,7 @@ type
 function TncTCPServerSourceSocket.CreateLineObject: TncLine;
 begin
   Result := TncSourceLine.Create;
+  TncSourceLine(Result).SetKind(stTCP);
 end;
 
 constructor TncServerSource.Create(AOwner: TComponent);
@@ -1358,6 +1383,7 @@ begin
   inherited Create(AOwner);
 
   Socket := TncTCPServerSourceSocket.Create(nil);
+  Socket.Family := afIPv4; // Set default family
   Socket.NoDelay := DefNoDelay;
   Socket.Port := DefPort;
   Socket.EventsUseMainThread := False;
@@ -1383,3 +1409,5 @@ begin
 end;
 
 end.
+
+

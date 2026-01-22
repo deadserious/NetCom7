@@ -1,4 +1,8 @@
 // This is the DB server part of netcom7
+//
+// 25/07/2025- by J.Pauwels
+// - Replace TCriticalSection to TMonitor
+//
 // Written by Demos Bill
 //
 // Date completed: 2011 / 5 / 5
@@ -34,7 +38,7 @@ type
   // Add an array of tables and if one of them is altered then void all the ReadyResults.
   TReadyQueryItem = class
   private
-    FSerialiser: TCriticalSection;
+    FSerialiser: TObject; // TMonitor synchronization object
     // Ready results holds a string list of Parameters, and the Objects are TBytes
     ReadyResults: TStringList;
   protected
@@ -43,7 +47,7 @@ type
   public
     ADOQuery: TADOQuery;
 
-    constructor Create(const aConnectionString, aSQL: string; aSerialiser: TCriticalSection);
+    constructor Create(const aConnectionString, aSQL: string; aSerialiser: TObject);
     destructor Destroy; override;
     function GetResult(aParams: TBytes; aUseCache: Boolean): TBytes;
     function Update(aUpdates: _recordset): TBytes;
@@ -52,7 +56,7 @@ type
 
   TReadyQueryList = class
   private
-    Serialiser: TCriticalSection;
+    Serialiser: TObject; // TMonitor synchronization object
     // A Sorted String List of SQL statements
     // The Data contains a TReadyQueryItem
     ReadyQueries: TStringList;
@@ -68,7 +72,7 @@ type
 
   TncDBServer = class(TncCustomCommandHandler)
   private
-    PropertyLock: TCriticalSection;
+    PropertyLock: TObject; // TMonitor synchronization object
     ReadyQueryList: TReadyQueryList;
     FCacheResponses: Boolean;
 
@@ -101,7 +105,7 @@ implementation
 constructor TncDBServer.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  PropertyLock := TCriticalSection.Create;
+  PropertyLock := TObject.Create;
   ReadyQueryList := TReadyQueryList.Create;
 
   FCacheResponses := True;
@@ -146,7 +150,7 @@ var
 begin
   SetLength(Result, 0);
 
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     if Assigned(FADOConnection) then
     begin
@@ -162,7 +166,7 @@ begin
       end;
     end;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 
   case aCmd of
@@ -263,47 +267,47 @@ end;
 
 function TncDBServer.GetADOConnection: TADOConnection;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FADOConnection;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncDBServer.SetADOConnection(const Value: TADOConnection);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FADOConnection := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 function TncDBServer.GetCacheResponses: Boolean;
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     Result := FCacheResponses;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 procedure TncDBServer.SetCacheResponses(const Value: Boolean);
 begin
-  PropertyLock.Acquire;
+  TMonitor.Enter(PropertyLock);
   try
     FCacheResponses := Value;
   finally
-    PropertyLock.Release;
+    TMonitor.Exit(PropertyLock);
   end;
 end;
 
 { TReadyQueryItem }
 
-constructor TReadyQueryItem.Create(const aConnectionString, aSQL: string; aSerialiser: TCriticalSection);
+constructor TReadyQueryItem.Create(const aConnectionString, aSQL: string; aSerialiser: TObject);
 begin
   FSerialiser := aSerialiser;
 
@@ -360,7 +364,7 @@ var
   Ndx: Integer;
   ResObj: TResObj;
 begin
-  FSerialiser.Acquire;
+  TMonitor.Enter(FSerialiser);
   try
     strParams := StringOf(aParams);
 
@@ -394,7 +398,7 @@ begin
       Result := TResObj(ReadyResults.Objects[Ndx]).Content;
 
   finally
-    FSerialiser.Release;
+    TMonitor.Exit(FSerialiser);
   end;
 end;
 
@@ -413,7 +417,7 @@ function TReadyQueryItem.Update(aUpdates: _recordset): TBytes;
 var
   tmpDS: TADODataSet;
 begin
-  FSerialiser.Acquire;
+  TMonitor.Enter(FSerialiser);
   try
     tmpDS := TADODataSet.Create(nil);
     try
@@ -426,7 +430,7 @@ begin
       tmpDS.Free;
     end;
   finally
-    FSerialiser.Release;
+    TMonitor.Exit(FSerialiser);
   end;
 end;
 
@@ -444,7 +448,7 @@ end;
 
 constructor TReadyQueryList.Create;
 begin
-  Serialiser := TCriticalSection.Create;
+  Serialiser := TObject.Create;
   ReadyQueries := TStringList.Create;
   ReadyQueries.CaseSensitive := False;
   ReadyQueries.Sorted := True;
@@ -468,7 +472,7 @@ function TReadyQueryList.GetQuery(const aSQL: string): TReadyQueryItem;
 var
   Ndx: Integer;
 begin
-  Serialiser.Acquire;
+  TMonitor.Enter(Serialiser);
   try
     Ndx := ReadyQueries.IndexOf(aSQL);
     if (Ndx < 0) then // not found
@@ -479,17 +483,17 @@ begin
     else
       Result := TReadyQueryItem(ReadyQueries.Objects[Ndx]);
   finally
-    Serialiser.Release;
+    TMonitor.Exit(Serialiser);
   end;
 end;
 
 procedure TReadyQueryList.SetConnectionString(const aConnectionString: string);
 begin
-  Serialiser.Acquire;
+  TMonitor.Enter(Serialiser);
   try
     FConnectionString := aConnectionString;
   finally
-    Serialiser.Release;
+    TMonitor.Exit(Serialiser);
   end;
 end;
 

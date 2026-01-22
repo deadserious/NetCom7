@@ -42,6 +42,7 @@ contains
   ncLines in 'Source\ncLines.pas',
   ncSocketList in 'Source\ncSocketList.pas',
   ncSockets in 'Source\ncSockets.pas',
+  ncSocketsThd in 'Source\ncSocketsThd.pas',
   ncCommandPacking in 'Source\ncCommandPacking.pas',
   ncCommandHandlers in 'Source\ncCommandHandlers.pas',
   ncSources in 'Source\ncSources.pas',
@@ -78,7 +79,13 @@ contains
   ncEncTea in 'Source\Encryption\ncEncTea.pas',
   ncEncTiger in 'Source\Encryption\ncEncTiger.pas',
   ncEncTwofish in 'Source\Encryption\ncEncTwofish.pas',
-  ncPendingCommandsList in 'Source\ncPendingCommandsList.pas';
+  ncPendingCommandsList in 'Source\ncPendingCommandsList.pas',
+  ncUDPSockets in 'Source\ncUDPSockets.pas',
+  ncUDPSocketsLCP in 'Source\ncUDPSocketsLCP.pas',
+  ncUDPSocketsDual in 'Source\ncUDPSocketsDual.pas',
+  ncIPUtils in 'Source\ncIPUtils.pas',
+  ncSChannel in 'Source\ncSChannel.pas',
+  ncSocketsDual in 'Source\ncSocketsDual.pas';
 
 end.
 

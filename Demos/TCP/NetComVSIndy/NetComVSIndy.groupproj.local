@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<BorlandProject>
+	<Transactions>
+    <Transaction>2025/07/19 21:15:44.000.829,C:\Users\leet\Documents\Embarcadero\Studio\Projects\ProjectGroup1.groupproj=D:\_Delphi\_Library\Netcom7\Demos\NetComVSIndy\NetComVSIndy.groupproj</Transaction>
+  </Transactions>
+	<Default.Personality>
+		<Projects ActiveProject="D:\_Delphi\_Library\Netcom7\Demos\NetComVSIndy\Server\NetComVSIndyServer.dproj"/>
+	</Default.Personality>
+</BorlandProject>
