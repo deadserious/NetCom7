@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs,
   FMX.Controls.Presentation, FMX.ScrollBox, FMX.Memo,
-  System.SyncObjs, ncSocketList, ncSources, CommonCommands;
+  System.SyncObjs, ncSocketList, ncSources, CommonCommands, FMX.Memo.Types;
 
 type
   TConnectedUserData = class
@@ -19,10 +19,11 @@ type
     memLog: TMemo;
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
-    function ServerHandleCommand(Sender: TObject; aLine: TncLine; aCmd: Integer; const aData: TArray<System.Byte>; aRequiresResult: Boolean;
-      const aSenderComponent, aReceiverComponent: string): TArray<System.Byte>;
     procedure ServerDisconnected(Sender: TObject; aLine: TncLine);
     procedure ServerConnected(Sender: TObject; aLine: TncLine);
+    function ServerHandleCommand(Sender: TObject; aLine: TncLine; aCmd: Integer;
+      const aData: TBytes; aRequiresResult: Boolean; const aSenderComponent,
+      aReceiverComponent: string): TBytes;
   private
     ConnectedUsersLock: TCriticalSection;
     ConnectedUsers: TStringList;
@@ -105,31 +106,9 @@ begin
   InformClientsOfLogins(aLine);
 end;
 
-// DontSendTo parameter is used by disconnect, so that we don't send the
-// disconnected line the message
-procedure TfrmMain.InformClientsOfLogins(aDontSendToLine: TncLine = nil);
-var
-  SocketList: TSocketList;
-  i: Integer;
-begin
-  // Now inform all clients to update their user lists
-  ConnectedUsersLock.Acquire;
-  try
-    SocketList := Server.Lines.LockList;
-    try
-      for i := 0 to SocketList.Count - 1 do
-        if SocketList.Lines[i] <> aDontSendToLine then
-          Server.ExecCommand(SocketList.Lines[i], cmdSrvUpdateLoggedInUsers, BytesOf(ConnectedUsers.CommaText), False);
-    finally
-      Server.Lines.UnlockList;
-    end;
-  finally
-    ConnectedUsersLock.Release;
-  end;
-end;
-
-function TfrmMain.ServerHandleCommand(Sender: TObject; aLine: TncLine; aCmd: Integer; const aData: TArray<System.Byte>; aRequiresResult: Boolean;
-const aSenderComponent, aReceiverComponent: string): TArray<System.Byte>;
+function TfrmMain.ServerHandleCommand(Sender: TObject; aLine: TncLine;
+  aCmd: Integer; const aData: TBytes; aRequiresResult: Boolean;
+  const aSenderComponent, aReceiverComponent: string): TBytes;
 var
   UserData: TConnectedUserData;
   i, j: Integer;
@@ -211,6 +190,29 @@ begin
           Server.Lines.UnlockList;
         end;
       end;
+  end;
+end;
+
+// DontSendTo parameter is used by disconnect, so that we don't send the
+// disconnected line the message
+procedure TfrmMain.InformClientsOfLogins(aDontSendToLine: TncLine = nil);
+var
+  SocketList: TSocketList;
+  i: Integer;
+begin
+  // Now inform all clients to update their user lists
+  ConnectedUsersLock.Acquire;
+  try
+    SocketList := Server.Lines.LockList;
+    try
+      for i := 0 to SocketList.Count - 1 do
+        if SocketList.Lines[i] <> aDontSendToLine then
+          Server.ExecCommand(SocketList.Lines[i], cmdSrvUpdateLoggedInUsers, BytesOf(ConnectedUsers.CommaText), False);
+    finally
+      Server.Lines.UnlockList;
+    end;
+  finally
+    ConnectedUsersLock.Release;
   end;
 end;
 
