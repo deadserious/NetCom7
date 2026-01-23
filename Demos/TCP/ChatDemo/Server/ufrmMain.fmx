@@ -43,6 +43,7 @@ object frmMain: TfrmMain
       Size.PlatformDefault = False
       TabOrder = 0
       Text = 'Activate Server'
+      TextSettings.Trimming = None
       OnClick = btnActivateServerClick
     end
     object btnShutDownClients: TButton
@@ -57,6 +58,7 @@ object frmMain: TfrmMain
       Size.PlatformDefault = False
       TabOrder = 2
       Text = 'Shutdown Clients'
+      TextSettings.Trimming = None
       OnClick = btnShutDownClientsClick
     end
   end

@@ -6,7 +6,7 @@ uses
   System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,
   FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs,
   FMX.StdCtrls, FMX.Controls.Presentation, FMX.ScrollBox, FMX.Memo,
-  System.SyncObjs, ncSocketList, ncSources;
+  System.SyncObjs, ncSocketList, ncSources, FMX.Memo.Types;
 
 type
   TfrmMain = class(TForm)
@@ -16,12 +16,13 @@ type
     btnActivateServer: TButton;
     btnShutDownClients: TButton;
     procedure FormDestroy(Sender: TObject);
-    function ServerHandleCommand(Sender: TObject; aLine: TncLine; aCmd: Integer; const aData: TArray<System.Byte>; aRequiresResult: Boolean;
-      const aSenderComponent, aReceiverComponent: string): TArray<System.Byte>;
     procedure ServerConnected(Sender: TObject; aLine: TncLine);
     procedure ServerDisconnected(Sender: TObject; aLine: TncLine);
     procedure btnActivateServerClick(Sender: TObject);
     procedure btnShutDownClientsClick(Sender: TObject);
+    function ServerHandleCommand(Sender: TObject; aLine: TncLine; aCmd: Integer;
+      const aData: TBytes; aRequiresResult: Boolean; const aSenderComponent,
+      aReceiverComponent: string): TBytes;
   private
   public
     procedure Log(aStr: string);
@@ -78,8 +79,10 @@ begin
   Log('Client disconnected: ' + aLine.PeerIP);
 end;
 
-function TfrmMain.ServerHandleCommand(Sender: TObject; aLine: TncLine; aCmd: Integer; const aData: TArray<System.Byte>; aRequiresResult: Boolean;
-const aSenderComponent, aReceiverComponent: string): TArray<System.Byte>;
+function TfrmMain.ServerHandleCommand(Sender: TObject; aLine: TncLine;
+  aCmd: Integer; const aData: TBytes; aRequiresResult: Boolean;
+  const aSenderComponent, aReceiverComponent: string): TBytes;
+
 var
   Clients: TSocketList;
   i: Integer;
