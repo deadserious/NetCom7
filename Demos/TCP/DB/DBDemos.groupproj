@@ -1,0 +1,72 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{A763B305-E4AA-4370-84CE-E9AA629C1BCD}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="ChatDemo\Client\ChatClient.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="DBClient\DBClient.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="DBServer\Service\DBServerService.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="DBServer\ServiceApplication\DBServerApplication.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="ChatClient">
+        <MSBuild Projects="ChatDemo\Client\ChatClient.dproj"/>
+    </Target>
+    <Target Name="ChatClient:Clean">
+        <MSBuild Projects="ChatDemo\Client\ChatClient.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="ChatClient:Make">
+        <MSBuild Projects="ChatDemo\Client\ChatClient.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DBClient">
+        <MSBuild Projects="DBClient\DBClient.dproj"/>
+    </Target>
+    <Target Name="DBClient:Clean">
+        <MSBuild Projects="DBClient\DBClient.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DBClient:Make">
+        <MSBuild Projects="DBClient\DBClient.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DBServerService">
+        <MSBuild Projects="DBServer\Service\DBServerService.dproj"/>
+    </Target>
+    <Target Name="DBServerService:Clean">
+        <MSBuild Projects="DBServer\Service\DBServerService.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DBServerService:Make">
+        <MSBuild Projects="DBServer\Service\DBServerService.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="DBServerApplication">
+        <MSBuild Projects="DBServer\ServiceApplication\DBServerApplication.dproj"/>
+    </Target>
+    <Target Name="DBServerApplication:Clean">
+        <MSBuild Projects="DBServer\ServiceApplication\DBServerApplication.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="DBServerApplication:Make">
+        <MSBuild Projects="DBServer\ServiceApplication\DBServerApplication.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="ChatClient;DBClient;DBServerService;DBServerApplication"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="ChatClient:Clean;DBClient:Clean;DBServerService:Clean;DBServerApplication:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="ChatClient:Make;DBClient:Make;DBServerService:Make;DBServerApplication:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

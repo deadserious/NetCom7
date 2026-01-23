@@ -5,7 +5,7 @@ interface
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, udmMain, DBCtrls, ExtCtrls, Grids, DBGrids, StdCtrls, ncSockets, ncDBCnt,
-  ComCtrls, ADOInt, ADODB, Data.DB;
+  ComCtrls, ADOInt, ADODB, Data.DB, Vcl.Buttons;
 
 type
   TfrmMain = class(TForm)

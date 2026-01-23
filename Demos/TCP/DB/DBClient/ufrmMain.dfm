@@ -10,8 +10,6 @@ object frmMain: TfrmMain
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
-  OldCreateOrder = False
-  PixelsPerInch = 96
   TextHeight = 13
   object Panel2: TPanel
     Left = 245
@@ -20,6 +18,8 @@ object frmMain: TfrmMain
     Height = 373
     Align = alClient
     TabOrder = 2
+    ExplicitWidth = 690
+    ExplicitHeight = 341
     object dbGrid1: TDBGrid
       AlignWithMargins = True
       Left = 4
@@ -44,6 +44,7 @@ object frmMain: TfrmMain
       DataSource = dmMain.DataSource1
       Align = alTop
       TabOrder = 1
+      ExplicitWidth = 682
     end
     object DBGrid2: TDBGrid
       AlignWithMargins = True
@@ -69,6 +70,8 @@ object frmMain: TfrmMain
       DataSource = dmMain.DataSource2
       Align = alBottom
       TabOrder = 3
+      ExplicitTop = 305
+      ExplicitWidth = 682
     end
   end
   object StatusBar: TStatusBar
@@ -78,6 +81,8 @@ object frmMain: TfrmMain
     Height = 19
     Panels = <>
     SimplePanel = True
+    ExplicitTop = 341
+    ExplicitWidth = 935
   end
   object Panel1: TPanel
     Left = 0
@@ -86,6 +91,7 @@ object frmMain: TfrmMain
     Height = 373
     Align = alLeft
     TabOrder = 0
+    ExplicitHeight = 341
     object Button1: TButton
       Left = 6
       Top = 52
