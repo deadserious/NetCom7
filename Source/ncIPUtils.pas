@@ -15,11 +15,21 @@ interface
 
 uses
   {$IFDEF MSWINDOWS}
-  Winapi.Windows, Winapi.Winsock2,
+  Winapi.Windows,
+  Winapi.Winsock2,
+  Winapi.IpHlpApi,
+  Winapi.IpTypes,
   {$ELSE}
-  Posix.SysSocket, Posix.NetDB, Posix.NetIf, Posix.ArpaInet,
+  Posix.Base,
+  Posix.SysSocket,
+  Posix.NetDB,
+  Posix.NetIf,
+  Posix.NetinetIn,
+  Posix.ArpaInet,
+  Posix.Unistd,
   {$ENDIF}
-  System.SysUtils, System.Classes;
+  System.SysUtils,
+  System.Classes;
 
 const
   IPV6_ADDR_LEN = 16;  // IPv6 address length in bytes
@@ -57,21 +67,29 @@ type
   PSockAddrStorage = ^TSockAddrStorage;
 
   {$IFNDEF MSWINDOWS}
+  TBytesOfUint = record
+    s_b1, s_b2, s_b3, s_b4: Byte;
+  end;
+
+  TSinAddr = record
+    case UInt32 of
+      0: (S_un_b : TBytesOfUint);
+      1: (S_addr : UInt32);
+  end;
+
   // Define Windows-compatible types for Linux
   TSockAddrIn = packed record
     sin_family: Word;
     sin_port: Word;
-    sin_addr: record
-      S_un_b: record
-        s_b1, s_b2, s_b3, s_b4: Byte;
-      end;
-    end;
+    sin_addr: TSinAddr;
     sin_zero: array[0..7] of Byte;
   end;
   PSockAddrIn = ^TSockAddrIn;
   {$ENDIF}
 
   EIPError = class(Exception);
+
+  TIPFamily = (ipfUnknown, ipfIPv4, ipfIPv6);
 
   // Function types for dynamic loading
   {$IFDEF MSWINDOWS}
@@ -89,8 +107,15 @@ type
       InetNtop: TInetNtop;
     class function LoadIPv6Functions: Boolean;
     {$ENDIF}
+    class function StripPortFromAddressString(const S: string): string;
   public
     class constructor Create;
+
+    // Generic IP Helpers
+    class function DetectIPFamily(const S: string): TIPFamily;
+    class function LocalIPForDestinationIP(DestinationIP : AnsiString) : string;
+    class function AllLocalIPs : TArray<string>;
+    class function IsLocalIP(IP : string) : boolean;
 
     // SockAddrStorage methods
     class function StorageToString(const Storage: TSockAddrStorage): string;
@@ -111,7 +136,55 @@ type
     class function PresentationToAddress(const Present: string; var Addr: TIn6Addr): Boolean;
   end;
 
+{$IFDEF POSIX}
+  function getifaddrs(var ifap: pifaddrs): Integer; cdecl; external libc name _PU + 'getifaddrs';
+  procedure freeifaddrs(ifap: pifaddrs); cdecl; external libc name _PU + 'freeifaddrs';
+{$ENDIF}
+
 implementation
+
+uses
+  System.Generics.Collections;
+
+class function TncIPUtils.DetectIPFamily(const S: string): TIPFamily;
+begin
+  if S.Contains(':') then Exit(ipfIPv6);
+  if S.Contains('.') then Exit(ipfIPv4);
+  Result := ipfUnknown;
+end;
+
+function SockAddrToIPString(const SA: PSockAddr; SALen: Integer): string;
+{$IFDEF MSWINDOWS}
+var
+  Buf: array[0..1024] of WideChar;
+  BufLen: DWORD;
+begin
+  Result := '';
+  if (SA = nil) or (SALen <= 0) then Exit;
+
+  BufLen := Length(Buf); // number of WideChar slots
+  if WSAAddressToStringW(TSockAddr(SA^), SALen, nil, @Buf[0], BufLen) = 0 then
+    Result := string(Buf);
+{$ELSE}
+var
+  Buf: array[0..INET6_ADDRSTRLEN - 1] of AnsiChar;
+  P: PAnsiChar;
+begin
+  Result := '';
+  FillChar(Buf, SizeOf(Buf), 0);
+
+  if Family = AF_INET then
+    P := inet_ntop(AF_INET, @Psockaddr_in(SA).sin_addr, Buf, INET_ADDRSTRLEN)
+  else if Family = AF_INET6 then
+    P := inet_ntop(AF_INET6, @Psockaddr_in6(SA).sin6_addr, Buf, INET6_ADDRSTRLEN)
+  else
+    Exit;
+
+  if P <> nil then
+    Result := string(AnsiString(Buf));
+{$ENDIF}
+end;
+
 
 {$IFDEF MSWINDOWS}
 var
@@ -133,6 +206,152 @@ begin
   end;
 end;
 {$ENDIF}
+
+
+class function TncIPUtils.StripPortFromAddressString(const S: string): string;
+var
+  P: Integer;
+begin
+  Result := S;
+
+  if Result = '' then
+    Exit;
+
+  // IPv6 form: "[addr]:port"
+  if Result.StartsWith('[') then
+  begin
+    P := Result.IndexOf(']');
+    if P > 0 then
+      Result := Result.Substring(1, P - 1);
+    Exit;
+  end;
+
+  // IPv4 form: "a.b.c.d:port"
+  P := Result.LastIndexOf(':');
+  if (P > 0) and (Result.IndexOf(':') = P) then
+    Result := Result.Substring(0, P);
+end;
+
+class function TncIPUtils.LocalIPForDestinationIP(
+  DestinationIP: AnsiString): string;
+{$IFDEF MSWINDOWS}
+var
+  Fam: TIPFamily;
+  S: TSocket;
+  SA4: TSockAddrIn;
+  SA4_SA: TSockAddr absolute SA4;
+  SA6: TSockAddrIn6;
+  SA6_SA: TSockAddr absolute SA6;
+  LocalSS: TSockAddrStorage;
+  LocalSS_SA : TSockAddr absolute LocalSS;
+  LocalLen: Integer;
+begin
+  Result := '';
+
+  Fam := DetectIPFamily(DestinationIP);
+  if Fam = ipfUnknown then Exit;
+
+  if Fam = ipfIPv4 then
+  begin
+    S := socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if S = INVALID_SOCKET then Exit;
+    try
+      ZeroMemory(@SA4, SizeOf(SA4));
+      SA4.sin_family := AF_INET;
+      SA4.sin_port := htons(53);
+      if InetPton(AF_INET, PAnsiChar(DestinationIP), @SA4.sin_addr) <> 1 then
+        Exit;
+
+      // UDP "connect" forces route/interface selection
+      connect(S, SA4_SA, SizeOf(SA4));
+
+      ZeroMemory(@LocalSS, SizeOf(LocalSS));
+      LocalLen := SizeOf(LocalSS);
+      if getsockname(S, LocalSS_SA, LocalLen) = 0 then
+        Result := SockAddrToIPString(@LocalSS_SA, LocalLen);
+    finally
+      closesocket(S);
+    end;
+  end
+  else
+  begin
+    S := socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    if S = INVALID_SOCKET then Exit;
+    try
+      ZeroMemory(@SA6, SizeOf(SA6));
+      SA6.sin6_family := AF_INET6;
+      SA6.sin6_port := htons(53);
+      if InetPton(AF_INET6, PAnsiChar(DestinationIP), @SA6.sin6_addr) <> 1 then Exit;
+
+      connect(S, SA6_SA, SizeOf(SA6));
+
+      ZeroMemory(@LocalSS, SizeOf(LocalSS));
+      LocalLen := SizeOf(LocalSS);
+      if getsockname(S, LocalSS_SA, LocalLen) = 0 then
+        Result := SockAddrToIPString(@LocalSS_SA, LocalLen);
+    finally
+      closesocket(S);
+    end;
+  end;
+end;
+{$ELSE}
+var
+  Fam: TIPFamily;
+  S: Integer;
+  SA4: sockaddr_in;
+  SA6: sockaddr_in6;
+  LocalSS: sockaddr_storage;
+  LocalLen: socklen_t;
+begin
+  Result := '';
+
+  Fam := DetectIPFamily(DestinationIP);
+  if Fam = ipfUnknown then Exit;
+
+  if Fam = ipfIPv4 then
+  begin
+    S := Posix.SysSocket.socket(AF_INET, SOCK_DGRAM, 0);
+    if S < 0 then Exit;
+    try
+      FillChar(SA4, SizeOf(SA4), 0);
+      SA4.sin_family := AF_INET;
+      SA4.sin_port := htons(53);
+      if inet_pton(AF_INET, PAnsiChar(AnsiString(DestinationIP)), @SA4.sin_addr) <> 1 then Exit;
+
+      Posix.SysSocket.connect(S, sockaddr(SA4), SizeOf(SA4));
+
+      FillChar(LocalSS, SizeOf(LocalSS), 0);
+      LocalLen := SizeOf(LocalSS);
+      if Posix.SysSocket.getsockname(S, Psockaddr(@LocalSS)^, LocalLen) = 0 then
+        Result := SockAddrToIPStringPosix(Psockaddr(@LocalSS), AF_INET);
+    finally
+      __close(S);
+    end;
+  end
+  else
+  begin
+    S := Posix.SysSocket.socket(AF_INET6, SOCK_DGRAM, 0);
+    if S < 0 then Exit;
+    try
+      FillChar(SA6, SizeOf(SA6), 0);
+      SA6.sin6_family := AF_INET6;
+      SA6.sin6_port := htons(53);
+      if inet_pton(AF_INET6, PAnsiChar(AnsiString(DestinationIP)), @SA6.sin6_addr) <> 1 then Exit;
+
+      Posix.SysSocket.connect(S, sockaddr(SA6), SizeOf(SA6));
+
+      FillChar(LocalSS, SizeOf(LocalSS), 0);
+      LocalLen := SizeOf(LocalSS);
+      if Posix.SysSocket.getsockname(S, Psockaddr(@LocalSS)^, LocalLen) = 0 then
+        Result := SockAddrToIPStringPosix(Psockaddr(@LocalSS), AF_INET6);
+    finally
+      __close(S);
+    end;
+  end;
+end;
+{$ENDIF}
+
+
 
 class constructor TncIPUtils.Create;
 begin
@@ -221,6 +440,97 @@ begin
   Result := string(AnsiString(StringBuffer));
 end;
 
+class function TncIPUtils.AllLocalIPs: TArray<string>;
+type
+  Psockaddr_in  = ^TSockAddrIn;
+  Psockaddr_in6 = ^TSockAddrIn6;
+  function SockAddrToIPStringPosix(const SA: Psockaddr; Family: Integer): string;
+  var
+    Buf: array[0..45] of AnsiChar;
+    P: PAnsiChar;
+  begin
+    Result := '';
+    FillChar(Buf, SizeOf(Buf), 0);
+
+    if Family = AF_INET then
+      P := inet_ntop(AF_INET, @Psockaddr_in(SA).sin_addr, Buf, 16)
+    else if Family = AF_INET6 then
+      P := inet_ntop(AF_INET6, @Psockaddr_in6(SA).sin6_addr, Buf, 46)
+    else
+      Exit;
+
+    if P <> nil then
+      Result := string(AnsiString(Buf));
+  end;
+var
+  L: TList<string>;
+begin
+  L := TList<string>.Create;
+  try
+{$IFDEF MSWINDOWS}
+
+    // Windows: GetAdaptersAddresses
+    var BufLen: ULONG := 15 * 1024;
+    var Adapters: PIP_ADAPTER_ADDRESSES := nil;
+    GetMem(Adapters, BufLen);
+    try
+      var Flags: ULONG :=
+        GAA_FLAG_SKIP_ANYCAST or
+        GAA_FLAG_SKIP_MULTICAST or
+        GAA_FLAG_SKIP_DNS_SERVER;
+
+      if GetAdaptersAddresses(AF_UNSPEC, Flags, nil, Adapters, @BufLen) = NO_ERROR then
+      begin
+        var Cur := Adapters;
+        while Cur <> nil do
+        begin
+          var Uni := Cur.FirstUnicastAddress;
+          while Uni <> nil do
+          begin
+            var S := SockAddrToIPString(Uni.Address.lpSockaddr, Uni.Address.iSockaddrLength);
+            if (S <> '') and (L.IndexOf(S) < 0) then
+              L.Add(S);
+            Uni := Uni.Next;
+          end;
+          Cur := Cur.Next;
+        end;
+      end;
+    finally
+      FreeMem(Adapters);
+    end;
+{$ENDIF}
+
+{$IFDEF POSIX}
+    // POSIX: getifaddrs
+    var IfAddrs: Pifaddrs := nil;
+    if getifaddrs(IfAddrs) = 0 then
+    try
+      var Cur: Pifaddrs := IfAddrs;
+      while Cur <> nil do
+      begin
+        if (Cur.ifa_addr <> nil) then
+        begin
+          var Family := Cur.ifa_addr.sa_family;
+          if (Family = AF_INET) or (Family = AF_INET6) then
+          begin
+            var S := SockAddrToIPStringPosix(Cur.ifa_addr, Family);
+            if (S <> '') and (L.IndexOf(S) < 0) then
+              L.Add(S);
+          end;
+        end;
+        Cur := Cur.ifa_next;
+      end;
+    finally
+      freeifaddrs(IfAddrs);
+    end;
+{$ENDIF}
+
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
 class function TncIPUtils.StringToAddress(const AddrStr: string; out Addr: TIn6Addr): Boolean;
 var
   AnsiAddr: AnsiString;
@@ -238,6 +548,15 @@ begin
   // Link-local addresses start with fe80::/10
   Result := (Length(AddrStr) >= 4) and
             (LowerCase(Copy(AddrStr, 1, 4)) = 'fe80');
+end;
+
+class function TncIPUtils.IsLocalIP(IP: string): boolean;
+begin
+  Result := False;
+  var ary := AllLocalIPs;
+  for var lip in ary do
+    if lip = IP then
+      exit(True);
 end;
 
 class function TncIPUtils.NormalizeAddress(const AddrStr: string): string;
