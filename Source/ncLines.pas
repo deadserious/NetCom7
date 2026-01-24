@@ -254,6 +254,12 @@ begin
   SocketArrayLength := Length(aSocketHandleArray);
   SocketArrayBytes := SocketArrayLength * SizeOf(TSocketHandle);
 
+  if SocketArrayLength = 0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
   // + 32 is there in case of compiler record field aligning
   GetMem(FDSetPtr, SizeOf(FDSetPtr^.fd_count) + SocketArrayBytes + 32);
   try
