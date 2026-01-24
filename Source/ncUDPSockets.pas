@@ -564,7 +564,7 @@ begin
 
           // Use Winsock API directly for IPv4 broadcast
           var addr := inet_addr(PAnsiChar(AnsiString(FHost)));
-          if addr <> INADDR_NONE then
+          if (addr <> INADDR_NONE) or (FHost = '255.255.255.255') then
             addrV4^.sin_addr.S_addr := addr
           else
             raise Exception.Create('Invalid IPv4 address format');
